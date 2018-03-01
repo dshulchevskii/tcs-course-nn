@@ -1,3 +1,4 @@
+import torch
 from torch import utils
 from torchvision import datasets, transforms
 import matplotlib
@@ -5,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torch.autograd import Variable
 
-def loader(train=True, batch_size=50, shuffle=True, normalize=None, path='./dataset'):
+def loader(train=True, batch_size=50, shuffle=True, normalize=None, fashion=False, path='./dataset'):
     if normalize is not None:
         transform = transforms.Compose([
                        transforms.ToTensor(),
@@ -13,9 +14,12 @@ def loader(train=True, batch_size=50, shuffle=True, normalize=None, path='./data
                    ])
     else:
         transform = transforms.ToTensor()
-    return utils.data.DataLoader(
-    datasets.MNIST(path, train=train, download=True,
-                   transform=transform), batch_size=batch_size, shuffle=shuffle)
+    if fashion:
+        return utils.data.DataLoader(datasets.FashionMNIST(path, train=train, download=True,
+                                     transform=transform), batch_size=batch_size, shuffle=shuffle)
+    else:
+        return utils.data.DataLoader(datasets.MNIST(path, train=train, download=True,
+                                     transform=transform), batch_size=batch_size, shuffle=shuffle)
                    
 def plot_mnist(images, shape):
     fig = plt.figure(figsize=shape[::-1], dpi=80)
@@ -34,26 +38,35 @@ def plot_results(model, loader, shape):
     pred = output.data.max(1, keepdim=True)[1]
     plot_mnist(data.data.numpy(), shape)
     print(pred.numpy().reshape(shape))
-    
+        
 def plot_graphs(log, tpe='loss'):
-    train_log = [z for z in zip(*log['train'])]
-    test_log = [z for z in zip(*log['test'])]
-    train_epochs = range(len(log['train']))
-    test_epochs = range(len(log['test']))
+    keys = log.keys()
+    logs = {k:[z for z in zip(*log[k])] for k in log.keys()}
+    epochs = {k:range(len(log[k])) for k in log.keys()}
     
     if tpe == 'loss':
-        train_handler, = plt.plot(train_epochs, train_log[0], color='r', label='train')
-        test_handler, = plt.plot(test_epochs, test_log[0], color='b', label='test')
+        handlers, = zip(*[plt.plot(epochs[k], logs[k][0], label=k) for k in log.keys()])
         plt.title('errors')
         plt.xlabel('epoch')
         plt.ylabel('error')
-        plt.legend(handles=[train_handler, test_handler])
+        plt.legend(handles=handlers)
         plt.show()
     elif tpe == 'accuracy':
-        train_handler, = plt.plot(train_epochs, train_log[1], color='r', label='train')
-        test_handler, = plt.plot(test_epochs, test_log[1], color='b', label='test')
+        handlers, = zip(*[plt.plot(epochs[k], logs[k][1], label=k) for k in log.keys()])
         plt.title('accuracy')
         plt.xlabel('epoch')
         plt.ylabel('accuracy')
-        plt.legend(handles=[train_handler, test_handler])
+        plt.legend(handles=handlers)
         plt.show()
+          
+def to_onehot(x, n, cuda=None):
+    if cuda is None:
+        cuda = x.is_cuda
+    if isinstance(x, Variable):
+        x = x.data
+    one_hot = torch.FloatTensor(x.size(0), n).zero_()
+    if cuda:
+        one_hot = one_hot.cuda()
+    one_hot.scatter_(1, x[:, None], 1)
+    one_hot = Variable(one_hot)
+    return one_hot
